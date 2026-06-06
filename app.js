@@ -1,370 +1,304 @@
-// =============================================
-//   EduSampah AI — Frontend App Logic
-//   SMA Muhammadiyah 1 Yogyakarta — 2026
-// =============================================
+// ========================================================
+//   EduSampah AI — JavaScript Frontend Logic (Production)
+// ========================================================
 
-// Ganti dengan URL backend kamu saat deploy
-// Contoh: "https://edusampah-ai.onrender.com"
-// Untuk localhost gunakan: "http://localhost:8000"
-const API_BASE = "http://localhost:8000";
+// Tautan API Backend yang mengarah ke Hugging Face Spaces Anda
+const API_BASE = "https://zhafrannn-edusampah-backend.hf.space";
 
-// ---- DATA JENIS SAMPAH ----
-const WASTE_DATA = {
-  organik: {
-    label: "Organik",
-    icon: "🌿",
-    color: "#E1F5EE",
-    iconColor: "#1D9E75",
-    info: "Sampah organik berasal dari bahan-bahan alami seperti sisa makanan, daun kering, ranting, dan limbah pertanian. Mudah terurai secara alami.",
-    tips: [
-      "Masukkan ke tempat sampah hijau (organik)",
-      "Bisa diolah menjadi pupuk kompos berkualitas",
-      "Jangan campur dengan plastik atau logam",
-      "Proses dekomposisi alami hanya 2–4 minggu"
-    ],
-    detail: `
-      <h3 style="font-size:18px;font-weight:800;margin-bottom:8px">♻️ Sampah Organik</h3>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">Sampah yang berasal dari makhluk hidup dan mudah terurai.</p>
-      <strong style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">Contoh</strong>
-      <p style="font-size:13px;margin:6px 0 14px">Sisa nasi, kulit buah, daun kering, ranting pohon, ampas kopi/teh, cangkang telur.</p>
-      <strong style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">Cara Pengelolaan</strong>
-      <ul style="font-size:13px;margin:8px 0 0 16px;line-height:2">
-        <li>Buat lubang biopori di halaman sekolah</li>
-        <li>Olah menjadi kompos dengan metode aerobik</li>
-        <li>Gunakan komposter sederhana dari drum bekas</li>
-        <li>Hasilnya bisa dipakai untuk pupuk tanaman sekolah</li>
-      </ul>
-    `
-  },
-  plastik: {
-    label: "Plastik",
-    icon: "♻️",
-    color: "#FAEEDA",
-    iconColor: "#EF9F27",
-    info: "Sampah plastik butuh ratusan tahun untuk terurai. Pilah berdasarkan kode daur ulang (angka 1–7) yang tertera di kemasan plastik.",
-    tips: [
-      "Bersihkan sisa makanan sebelum dibuang",
-      "Pisahkan berdasarkan jenis kode plastik (1-7)",
-      "Bawa ke bank sampah atau pengepul plastik",
-      "Kurangi penggunaan plastik sekali pakai"
-    ],
-    detail: `
-      <h3 style="font-size:18px;font-weight:800;margin-bottom:8px">🧴 Sampah Plastik</h3>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">Membutuhkan 400–1000 tahun untuk terurai di alam.</p>
-      <strong style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">Contoh</strong>
-      <p style="font-size:13px;margin:6px 0 14px">Botol minuman, kantong kresek, sedotan, styrofoam, bungkus makanan, wadah sampo.</p>
-      <strong style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">Kode Plastik yang Bisa Didaur Ulang</strong>
-      <ul style="font-size:13px;margin:8px 0 0 16px;line-height:2">
-        <li><b>#1 PET</b> — Botol minuman, mudah didaur ulang</li>
-        <li><b>#2 HDPE</b> — Botol susu, wadah deterjen</li>
-        <li><b>#5 PP</b> — Sedotan, wadah yoghurt</li>
-        <li><b>#4 LDPE</b> — Kantong plastik tipis</li>
-      </ul>
-    `
-  },
-  kertas: {
-    label: "Kertas",
-    icon: "📄",
-    color: "#E6F1FB",
-    iconColor: "#378ADD",
-    info: "Kertas yang tidak terkontaminasi minyak atau makanan bisa didaur ulang menjadi produk kertas baru, menghemat pohon dan sumber daya air.",
-    tips: [
-      "Jaga agar kertas tetap kering dan bersih",
-      "Singkirkan selotip, staples, atau plastik",
-      "Jual ke bank sampah atau pengepul kertas",
-      "Bisa dijadikan bahan kerajinan tangan kreatif"
-    ],
-    detail: `
-      <h3 style="font-size:18px;font-weight:800;margin-bottom:8px">📰 Sampah Kertas</h3>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">Setiap ton kertas daur ulang menyelamatkan 17 pohon.</p>
-      <strong style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">Contoh</strong>
-      <p style="font-size:13px;margin:6px 0 14px">Kertas HVS, kardus, koran, buku bekas, karton, tissue kering.</p>
-      <strong style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">Tips Pengelolaan</strong>
-      <ul style="font-size:13px;margin:8px 0 0 16px;line-height:2">
-        <li>Pisahkan dari sampah basah agar tidak lembap</li>
-        <li>Lepas bagian non-kertas (plastik, logam)</li>
-        <li>Tumpuk rapi dan ikat sebelum dijual/disetor</li>
-        <li>Kertas kotor/berminyak tidak bisa didaur ulang</li>
-      </ul>
-    `
-  },
-  logam: {
-    label: "Logam",
-    icon: "⚙️",
-    color: "#FAECE7",
-    iconColor: "#D85A30",
-    info: "Logam memiliki nilai ekonomi tinggi dan bisa didaur ulang hampir tanpa batas kehilangan kualitas. Kaleng aluminium adalah yang paling berharga.",
-    tips: [
-      "Pisahkan jenis logam (aluminium, besi, tembaga)",
-      "Cuci dan keringkan sebelum dikumpulkan",
-      "Jual ke bank sampah untuk nilai terbaik",
-      "Jangan membakar logam — berbahaya!"
-    ],
-    detail: `
-      <h3 style="font-size:18px;font-weight:800;margin-bottom:8px">🔩 Sampah Logam</h3>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">Logam dapat didaur ulang tanpa batas dan memiliki nilai jual tinggi.</p>
-      <strong style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">Contoh</strong>
-      <p style="font-size:13px;margin:6px 0 14px">Kaleng aluminium, kaleng sarden/susu, kawat, paku bekas, peralatan dapur rusak.</p>
-      <strong style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280">Nilai Ekonomi</strong>
-      <ul style="font-size:13px;margin:8px 0 0 16px;line-height:2">
-        <li>Aluminium: Rp 10.000–15.000/kg</li>
-        <li>Besi/baja: Rp 2.000–4.000/kg</li>
-        <li>Tembaga: Rp 60.000–80.000/kg</li>
-        <li>Setorkan ke bank sampah terdekat</li>
-      </ul>
-    `
-  }
-};
-
-// ---- STATE ----
-let currentImageBase64 = null;
 let stream = null;
-let scanHistory = JSON.parse(localStorage.getItem("edusampah_history") || '{"total":0,"organik":0,"plastik":0,"kertas":0,"logam":0}');
+let currentFile = null;
 
-// =============================================
-//   NAVIGATION
-// =============================================
-function switchTab(t) {
-  document.querySelectorAll(".tab").forEach((el, i) => {
-    el.classList.toggle("active", ["scan","stats","edu","about"][i] === t);
-  });
-  document.querySelectorAll(".panel").forEach(el => el.classList.remove("active"));
-  document.getElementById("panel-" + t).classList.add("active");
-  if (t === "stats") updateStats();
+// Mengatur Data Statistik Default di LocalStorage
+if (!localStorage.getItem('edu_stats')) {
+    localStorage.setItem('edu_stats', JSON.stringify({
+        total: 0,
+        organik: 0,
+        plastik: 0,
+        kertas: 0,
+        logam: 0
+    }));
 }
 
-// =============================================
-//   KAMERA & FILE
-// =============================================
-function startCamera() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("Browser ini tidak mendukung akses kamera. Silakan gunakan Chrome atau Firefox terbaru.");
-    return;
-  }
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-    .then(s => {
-      stream = s;
-      const v = document.getElementById("video-el");
-      v.srcObject = s;
-      v.style.display = "block";
-      document.getElementById("cam-overlay").style.display = "none";
-      document.getElementById("preview-img").style.display = "none";
-      document.getElementById("btn-scan-now").style.display = "flex";
-      currentImageBase64 = null;
-    })
-    .catch(() => {
-      alert("Akses kamera ditolak atau tidak tersedia.\nSilakan unggah foto sebagai gantinya.");
-    });
+// 1. FUNGSI NAVIGASI TAB MENU
+function switchTab(tabName) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    
+    const targetPanel = document.getElementById(`panel-${tabName}`);
+    if (targetPanel) targetPanel.classList.add('active');
+    
+    // Cari tombol navigasi yang sesuai
+    const tabs = document.querySelectorAll('.tab');
+    if (tabName === 'scan') tabs[0].classList.add('active');
+    if (tabName === 'stats') {
+        tabs[1].classList.add('active');
+        updateStats();
+    }
+    if (tabName === 'edu') tabs[2].classList.add('active');
+    if (tabName === 'about') tabs[3].classList.add('active');
+
+    // Matikan kamera jika pindah dari tab scan
+    if (tabName !== 'scan') stopCamera();
+}
+
+// 2. FUNGSI LOGIKA KAMERA HP/LAPTOP
+async function startCamera() {
+    const video = document.getElementById('video-el');
+    const preview = document.getElementById('preview-img');
+    const overlay = document.getElementById('cam-overlay');
+    const btnScan = document.getElementById('btn-scan-now');
+
+    preview.classList.add('hidden');
+    currentFile = null;
+
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' },
+            audio: false
+        });
+        video.srcObject = stream;
+        video.classList.remove('hidden');
+        overlay.classList.add('hidden');
+        btnScan.classList.remove('hidden');
+    } catch (err) {
+        alert("Gagal membuka kamera. Pastikan memberikan izin akses kamera.");
+        console.error(err);
+    }
 }
 
 function stopCamera() {
-  if (stream) {
-    stream.getTracks().forEach(t => t.stop());
-    stream = null;
-  }
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+    }
 }
 
-function handleFile(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  stopCamera();
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const img = document.getElementById("preview-img");
-    img.src = ev.target.result;
-    img.style.display = "block";
-    document.getElementById("video-el").style.display = "none";
-    document.getElementById("cam-overlay").style.display = "none";
-    document.getElementById("btn-scan-now").style.display = "flex";
-    currentImageBase64 = ev.target.result.split(",")[1];
-  };
-  reader.readAsDataURL(file);
+// 3. FUNGSI HANDLER UNGGAH FOTO (FILE INPUT)
+function handleFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    currentFile = file;
+    stopCamera();
+
+    const video = document.getElementById('video-el');
+    const preview = document.getElementById('preview-img');
+    const overlay = document.getElementById('cam-overlay');
+    const btnScan = document.getElementById('btn-scan-now');
+
+    video.classList.add('hidden');
+    overlay.classList.add('hidden');
+    
+    // Tampilkan gambar pratinjau
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        preview.src = e.target.result;
+        preview.classList.remove('hidden');
+        btnScan.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
 }
 
-function captureFromVideo() {
-  const v = document.getElementById("video-el");
-  const c = document.createElement("canvas");
-  c.width = v.videoWidth;
-  c.height = v.videoHeight;
-  c.getContext("2d").drawImage(v, 0, 0);
-  const dataUrl = c.toDataURL("image/jpeg", 0.85);
-  // Tampilkan hasil capture
-  const img = document.getElementById("preview-img");
-  img.src = dataUrl;
-  img.style.display = "block";
-  v.style.display = "none";
-  stopCamera();
-  return dataUrl.split(",")[1];
-}
-
-// =============================================
-//   KLASIFIKASI / SCAN
-// =============================================
+// 4. FUNGSI UTAMA SCAN DAN KIRIM KE BACKEND HUGGING FACE
 async function doScan() {
-  let imgB64 = currentImageBase64;
+    const btnScan = document.getElementById('btn-scan-now');
+    const thinking = document.getElementById('thinking');
+    const resultBox = document.getElementById('result-box');
 
-  const v = document.getElementById("video-el");
-  if (!imgB64 && v.style.display !== "none") {
-    imgB64 = captureFromVideo();
-    currentImageBase64 = imgB64;
-  }
+    btnScan.classList.add('hidden');
+    thinking.classList.add('show');
+    resultBox.classList.remove('show');
 
-  if (!imgB64) {
-    alert("Aktifkan kamera atau unggah foto terlebih dahulu.");
-    return;
-  }
+    let formData = new FormData();
 
-  // Tampilkan loading
-  document.getElementById("result-box").classList.remove("show");
-  document.getElementById("thinking").classList.add("show");
-  document.getElementById("btn-scan-now").disabled = true;
+    if (currentFile) {
+        // Kasus: Menggunakan file foto yang diunggah
+        formData.append("file", currentFile);
+    } else if (stream) {
+        // Kasus: Mengambil jepretan langsung dari kamera aktif
+        const video = document.getElementById('video-el');
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
+        formData.append("file", blob, "capture.jpg");
+    } else {
+        alert("Silakan pilih foto atau buka kamera terlebih dahulu!");
+        resetScan();
+        return;
+    }
 
-  try {
-    // Kirim ke backend Python (YOLOv8)
-    const response = await fetch(`${API_BASE}/classify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: imgB64 })
-    });
+    try {
+        // Proses Pengiriman Data Menggunakan Fetch API ke Hugging Face
+        const response = await fetch(`${API_BASE}/predict`, {
+            method: "POST",
+            body: formData
+        });
 
-    if (!response.ok) throw new Error("Server error: " + response.status);
+        if (!response.ok) throw new Error("Server memberikan respon error.");
 
-    const data = await response.json();
-    // Backend mengembalikan: { class: "Plastik", confidence: 0.92, processing_time_ms: 45 }
-    showResult(data.class, Math.round(data.confidence * 100), data.processing_time_ms);
-    updateHistory(data.class.toLowerCase());
-
-  } catch (err) {
-    console.error("Backend tidak tersedia:", err);
-    // Fallback ke Claude API jika backend tidak aktif
-    await classifyWithClaude(imgB64);
-  }
-
-  document.getElementById("thinking").classList.remove("show");
-  document.getElementById("btn-scan-now").disabled = false;
+        const data = await response.json();
+        
+        // Tampilkan Hasil Analisis AI ke Tampilan Layar
+        showResult(data);
+    } catch (error) {
+        alert("Gagal menghubungi server AI di Hugging Face. Pastikan server berstatus 'Running'.");
+        console.error(error);
+        resetScan();
+    } finally {
+        thinking.classList.remove('show');
+    }
 }
 
-// Fallback: klasifikasi pakai Claude API langsung dari browser
-async function classifyWithClaude(imgB64) {
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 300,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: imgB64 } },
-            { type: "text", text: `Klasifikasikan sampah dalam gambar ini ke salah satu dari 4 kelas: Organik, Plastik, Kertas, atau Logam. Jawab HANYA JSON tanpa backtick: {"class":"Organik|Plastik|Kertas|Logam","confidence":0.0-1.0,"reason":"alasan singkat dalam bahasa Indonesia"}` }
-          ]
-        }]
-      })
-    });
-    const data = await res.json();
-    const text = data.content.map(c => c.text || "").join("");
-    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
-    showResult(parsed.class, Math.round(parsed.confidence * 100), null, parsed.reason);
-    updateHistory(parsed.class.toLowerCase());
-  } catch (e) {
-    showError();
-  }
-}
+// 5. FUNGSI MENAMPILKAN HASIL PREDIKSI & UPDATE LOCAL STORAGE
+function showResult(data) {
+    const resultBox = document.getElementById('result-box');
+    const typeTitle = document.getElementById('result-type');
+    const confText = document.getElementById('conf-text');
+    const confBar = document.getElementById('conf-bar');
+    const infoText = document.getElementById('result-info');
+    const tipsContainer = document.getElementById('result-tips');
+    const iconEl = document.getElementById('result-icon');
 
-function showResult(jenisRaw, pct, processingMs = null, reason = null) {
-  const key = jenisRaw.toLowerCase();
-  const d = WASTE_DATA[key] || WASTE_DATA["organik"];
+    // Mengambil data dari JSON response FastAPI
+    const label = data.class_name || "Tidak Diketahui";
+    const confidence = Math.round((data.confidence || 0) * 100);
 
-  document.getElementById("result-icon").innerHTML = `<span style="font-size:24px">${d.icon}</span>`;
-  document.getElementById("result-icon").style.background = d.color;
-  document.getElementById("result-type").textContent = d.label;
-  document.getElementById("conf-text").textContent = pct + "%";
-  document.getElementById("conf-bar").style.width = pct + "%";
+    typeTitle.textContent = label;
+    confText.textContent = `${confidence}%`;
+    confBar.style.width = `${confidence}%`;
 
-  let infoText = reason ? `${reason} — ${d.info}` : d.info;
-  if (processingMs) infoText += ` (Diproses dalam ${processingMs}ms)`;
-  document.getElementById("result-info").textContent = infoText;
+    // Ambil Data Statistik Lokal
+    let stats = JSON.parse(localStorage.getItem('edu_stats'));
+    stats.total += 1;
 
-  document.getElementById("result-tips").innerHTML = `
-    <div class="tips-title">Cara Pengelolaan</div>
-    ${d.tips.map(t => `<div class="tip-item"><i class="ti ti-circle-check"></i><span>${t}</span></div>`).join("")}
-  `;
+    // Normalisasi Klasifikasi untuk Edukasi Adiwiyata Moehi
+    const lowerLabel = label.toLowerCase();
+    tipsContainer.innerHTML = "";
 
-  document.getElementById("result-box").classList.add("show");
-}
+    if (lowerLabel.includes('organic') || lowerLabel.includes('organik')) {
+        iconEl.innerHTML = "🌿";
+        iconEl.className = "w-12 h-12 rounded-xl flex items-center justify-center bg-emerald-50 text-xl";
+        infoText.textContent = "Sampah Organik terdeteksi. Jenis sampah ini berasal dari sisa makhluk hidup yang mudah membusuk secara alami.";
+        tipsContainer.innerHTML = `
+            <div class="flex items-center gap-2 text-xs text-emerald-700 font-semibold"><i class="ti ti-check"></i> Buang ke Tempat Sampah Hijau</div>
+            <div class="flex items-center gap-2 text-xs text-gray-600"><i class="ti ti-arrow-right"></i> Manfaatkan untuk pembuatan pupuk kompos sekolah atau masukkan ke lubang biopori Moehi.</div>
+        `;
+        stats.organik += 1;
+    } else if (lowerLabel.includes('paper') || lowerLabel.includes('kertas')) {
+        iconEl.innerHTML = "📄";
+        iconEl.className = "w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50 text-xl";
+        infoText.textContent = "Sampah Kertas terdeteksi. Merupakan bahan selulosa kering yang dapat didaur ulang menjadi kerajinan tangan bernilai guna.";
+        tipsContainer.innerHTML = `
+            <div class="flex items-center gap-2 text-xs text-blue-700 font-semibold"><i class="ti ti-check"></i> Masukkan ke Dropbox Pilah Kertas</div>
+            <div class="flex items-center gap-2 text-xs text-gray-600"><i class="ti ti-arrow-right"></i> Pisahkan dari material basah dan kumpulkan ke Bank Sampah sekolah.</div>
+        `;
+        stats.kertas += 1;
+    } else if (lowerLabel.includes('metal') || lowerLabel.includes('logam') || lowerLabel.includes('glass') || lowerLabel.includes('kaca')) {
+        iconEl.innerHTML = "⚙️";
+        iconEl.className = "w-12 h-12 rounded-xl flex items-center justify-center bg-red-50 text-xl";
+        infoText.textContent = "Sampah Anorganik Berharga (Logam/Kaca) terdeteksi. Memiliki waktu urai hingga ratusan tahun namun bernilai ekonomis tinggi.";
+        tipsContainer.innerHTML = `
+            <div class="flex items-center gap-2 text-xs text-red-700 font-semibold"><i class="ti ti-check"></i> Buang ke Tong Sampah Kuning</div>
+            <div class="flex items-center gap-2 text-xs text-gray-600"><i class="ti ti-arrow-right"></i> Bersihkan sisa cairan lalu donasikan ke kader Adiwiyata untuk ditabung.</div>
+        `;
+        stats.logam += 1;
+    } else {
+        // Kategori Plastik / Anorganik Lainnya
+        iconEl.innerHTML = "♻️";
+        iconEl.className = "w-12 h-12 rounded-xl flex items-center justify-center bg-amber-50 text-xl";
+        infoText.textContent = "Sampah Plastik/Anorganik Umum terdeteksi. Jenis material sintetis yang sulit terurai secara alami di lingkungan sekolah.";
+        tipsContainer.innerHTML = `
+            <div class="flex items-center gap-2 text-xs text-amber-700 font-semibold"><i class="ti ti-check"></i> Buang ke Tong Sampah Kuning</div>
+            <div class="flex items-center gap-2 text-xs text-gray-600"><i class="ti ti-arrow-right"></i> Kurangi penggunaan sedotan/kantong plastik kresek di area kantin Moehi.</div>
+        `;
+        stats.plastik += 1;
+    }
 
-function showError() {
-  document.getElementById("result-box").innerHTML = `
-    <div style="text-align:center;padding:20px;color:#6b7280">
-      <i class="ti ti-alert-circle" style="font-size:32px;color:#EF9F27;display:block;margin-bottom:8px"></i>
-      <strong>Gagal menghubungi server</strong>
-      <p style="font-size:13px;margin-top:6px">Pastikan backend Python sudah berjalan di <code>localhost:8000</code></p>
-    </div>
-  `;
-  document.getElementById("result-box").classList.add("show");
+    // Simpan Kembali Update Statistik
+    localStorage.setItem('edu_stats', JSON.stringify(stats));
+    resultBox.classList.add('show');
+    stopCamera();
 }
 
 function resetScan() {
-  document.getElementById("result-box").classList.remove("show");
-  document.getElementById("preview-img").style.display = "none";
-  document.getElementById("cam-overlay").style.display = "block";
-  document.getElementById("btn-scan-now").style.display = "none";
-  document.getElementById("file-input").value = "";
-  currentImageBase64 = null;
+    stopCamera();
+    currentFile = null;
+    document.getElementById('video-el').classList.add('hidden');
+    document.getElementById('preview-img').classList.add('hidden');
+    document.getElementById('cam-overlay').classList.remove('hidden');
+    document.getElementById('btn-scan-now').classList.add('hidden');
+    document.getElementById('result-box').classList.remove('show');
+    document.getElementById('thinking').classList.remove('show');
 }
 
-// =============================================
-//   STATISTIK
-// =============================================
-function updateHistory(key) {
-  scanHistory.total++;
-  if (scanHistory[key] !== undefined) scanHistory[key]++;
-  localStorage.setItem("edusampah_history", JSON.stringify(scanHistory));
-}
-
+// 6. FUNGSI ME-RENDER PANEL STATISTIK KEPADA PENGGUNA
 function updateStats() {
-  const h = scanHistory;
-  document.getElementById("total-scan").textContent = h.total;
-  const org = h.organik || 0, pl = h.plastik || 0, ker = h.kertas || 0, log = h.logam || 0;
-  document.getElementById("ct-organik").textContent = org;
-  document.getElementById("ct-anorganik").textContent = pl + ker + log;
-  const total = org + pl + ker + log || 1;
-  const setBar = (id, val) => {
-    const pct = Math.round(val / total * 100);
-    document.getElementById("bar-" + id).style.width = pct + "%";
-    document.getElementById("pct-" + id).textContent = pct + "%";
-  };
-  setBar("organik", org); setBar("plastik", pl); setBar("kertas", ker); setBar("logam", log);
+    const stats = JSON.parse(localStorage.getItem('edu_stats'));
+    
+    document.getElementById('total-scan').textContent = stats.total;
+    document.getElementById('ct-organik').textContent = stats.organik;
+    document.getElementById('ct-anorganik').textContent = (stats.plastik + stats.kertas + stats.logam);
+
+    const total = stats.total || 1; // Mencegah pembagian angka nol (NaN)
+
+    setBar('organik', stats.organik, total);
+    setBar('plastic', stats.plastik, total);
+    setBar('kertas', stats.kertas, total);
+    setBar('logam', stats.logam, total);
+}
+
+function setBar(id, nilai, total) {
+    const pct = Math.round((nilai / total) * 100);
+    const pctTxt = document.getElementById(`pct-${id}`);
+    const barEl = document.getElementById(`bar-${id}`);
+    
+    if (pctTxt) pctTxt.textContent = `${pct}%`;
+    if (barEl) barEl.style.width = `${pct}%`;
 }
 
 function resetStats() {
-  if (confirm("Reset semua data statistik?")) {
-    scanHistory = { total: 0, organik: 0, plastik: 0, kertas: 0, logam: 0 };
-    localStorage.removeItem("edusampah_history");
-    updateStats();
-  }
+    if(confirm("Apakah Anda yakin ingin menghapus semua data statistik Adiwiyata?")) {
+        localStorage.removeItem('edu_stats');
+        location.reload();
+    }
 }
 
-// =============================================
-//   EDUKASI MODAL
-// =============================================
-function showEduDetail(key) {
-  const d = WASTE_DATA[key];
-  if (!d) return;
-  document.getElementById("modal-content").innerHTML = `
-    <div style="background:${d.color};border-radius:10px;padding:16px;margin-bottom:16px">
-      ${d.detail}
-    </div>
-  `;
-  document.getElementById("edu-modal").classList.add("open");
+// FUNGSI MODAL DI TAB EDUKASI
+function showEduDetail(type) {
+    const modal = document.getElementById('edu-modal');
+    const content = document.getElementById('modal-content');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    if (type === 'organik') {
+        content.innerHTML = `
+            <h3 class="text-base font-bold text-emerald-700">🌿 Pengolahan Sampah Organik Moehi</h3>
+            <p class="text-xs text-gray-600 mt-2 leading-relaxed">Di SMA Muhammadiyah 1 Yogyakarta, sampah organik dari sisa guguran daun diolah menjadi kompos menggunakan komposter sekolah atau dimanfaatkan langsung melalui lubang biopori resapan air guna menyuburkan tanah sekitar halaman sekolah.</p>
+        `;
+    } else if (type === 'plastik') {
+        content.innerHTML = `
+            <h3 class="text-base font-bold text-amber-700">♻️ Memahami Kode & Bahaya Plastik</h3>
+            <p class="text-xs text-gray-600 mt-2 leading-relaxed">Siswa diimbau untuk selalu melihat kode logo segitiga daur ulang di bawah botol plastik (PETE 1, HDPE 2, dsb). Mari sukseskan gerakan bebas plastik sekali pakai dengan membawa botol minum (Tumbler) sendiri dari rumah!</p>
+        `;
+    } else if (type === 'kertas') {
+        content.innerHTML = `
+            <h3 class="text-base font-bold text-blue-700">📄 Dropbox Kertas & Penyelamatan Pohon</h3>
+            <p class="text-xs text-gray-600 mt-2 leading-relaxed">Setiap ruang kelas difasilitasi kotak khusus pilah kertas bekas tugas atau kertas ujian. Kertas yang terkumpul secara berkala didaur ulang menjadi lembaran kreatif atau disalurkan ke pengepul mitra Adiwiyata Moehi.</p>
+        `;
+    } else if (type === 'logam') {
+        content.innerHTML = `
+            <h3 class="text-base font-bold text-red-700">⚙️ Tabungan Logam Ekonomis</h3>
+            <p class="text-xs text-gray-600 mt-2 leading-relaxed">Sampah berupa kaleng minuman ringan atau kemasan aluminium memiliki harga jual stabil yang tinggi. Melalui program Bank Sampah sekolah, siswa dapat mengumpulkan kaleng ini untuk dikonversi menjadi tabungan kelas.</p>
+        `;
+    }
 }
 
 function closeModal() {
-  document.getElementById("edu-modal").classList.remove("open");
+    const modal = document.getElementById('edu-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
 }
-
-// Tutup modal dengan tombol Escape
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape") closeModal();
-});

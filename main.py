@@ -1,14 +1,8 @@
-# =============================================
-#   EduSampah AI — Backend FastAPI
+# =============================================================
+#   EduSampah AI — Backend FastAPI (Production & CORS Allowed)
 #   SMA Muhammadiyah 1 Yogyakarta — 2026
-#
-#   Endpoint utama:
-#     POST /classify  → klasifikasi gambar sampah
-#     GET  /health    → cek status server
-#     GET  /stats     → statistik server
-# =============================================
+# =============================================================
 
-import base64
 import io
 import time
 import logging
@@ -16,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -33,11 +27,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# ---- CORS (izinkan frontend mengakses backend) ----
+# ---- KODE REVISI CORS (Izinkan Semua Koneksi Frontend Mengakses API) ----
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # Ganti dengan domain kamu saat deploy produksi
-    allow_methods=["GET", "POST"],
+    allow_origins=["*"],  # Mengizinkan localhost/Live Server mengakses backend internet
+    allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -49,13 +44,11 @@ server_stats = {"total_requests": 0, "successful": 0, "failed": 0}
 async def startup_event():
     global model
     logger.info("Memuat model AI...")
-    model = load_model()
-    logger.info("Model berhasil dimuat! Server siap.")
-
-
-# ---- Schema Request ----
-class ClassifyRequest(BaseModel):
-    image: str   # Base64 encoded JPEG/PNG
+    try:
+        model = load_model()
+        logger.info("Model berhasil dimuat! Server siap.")
+    except Exception as e:
+        logger.error(f"Gagal memuat model pada startup: {e}")
 
 
 # ---- Schema Response ----
@@ -68,7 +61,7 @@ class ClassifyResponse(BaseModel):
 
 
 # =============================================
-#   ENDPOINT: Health Check
+#   ENDPOINT: Health Check & Stats
 # =============================================
 @app.get("/health")
 def health_check():
@@ -78,42 +71,42 @@ def health_check():
         "server": "EduSampah AI v1.0"
     }
 
-
-# =============================================
-#   ENDPOINT: Statistik Server
-# =============================================
 @app.get("/stats")
 def get_stats():
     return server_stats
 
 
-# =============================================
-#   ENDPOINT: Klasifikasi Gambar
-# =============================================
-@app.post("/classify", response_model=ClassifyResponse)
-async def classify_image(req: ClassifyRequest):
+# =========================================================================
+#   ENDPOINT UTAMA REVISI: Menerima File Gambar Langsung dari app.js
+# =========================================================================
+@app.post("/predict", response_model=ClassifyResponse)
+async def classify_image(file: UploadFile = File(...)):
     server_stats["total_requests"] += 1
     start = time.time()
 
-    # 1. Decode Base64 → PIL Image
+    if model is None:
+        server_stats["failed"] += 1
+        raise HTTPException(status_code=503, detail="Model AI belum siap di server.")
+
+    # 1. Membaca File Gambar yang Dikirim dari Frontend
     try:
-        img_bytes = base64.b64decode(req.image)
-        image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-        # Resize ke ukuran input model (640x640 untuk YOLOv8, 224x224 untuk MobileNet)
-        image_resized = image.resize((224, 224))
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents)).convert("RGB")
+        # Menyesuaikan dengan ukuran input model AI Anda
+        image_resized = image.resize((640, 640))
         img_array = np.array(image_resized)
     except Exception as e:
         server_stats["failed"] += 1
-        logger.error(f"Gagal decode gambar: {e}")
-        raise HTTPException(status_code=400, detail=f"Gambar tidak valid: {str(e)}")
+        logger.error(f"Gagal memproses file gambar: {e}")
+        raise HTTPException(status_code=400, detail=f"File gambar rusak atau tidak valid: {str(e)}")
 
-    # 2. Prediksi dengan model
+    # 2. Melakukan Prediksi dengan Model AI
     try:
         result = predict(model, img_array)
     except Exception as e:
         server_stats["failed"] += 1
-        logger.error(f"Gagal prediksi: {e}")
-        raise HTTPException(status_code=500, detail=f"Error prediksi: {str(e)}")
+        logger.error(f"Gagal melakukan prediksi: {e}")
+        raise HTTPException(status_code=500, detail=f"Error internal model AI: {str(e)}")
 
     elapsed_ms = int((time.time() - start) * 1000)
     server_stats["successful"] += 1

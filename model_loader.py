@@ -16,10 +16,10 @@ from pathlib import Path
 logger = logging.getLogger("edusampah")
 
 # ---- Label Kelas ----
-CLASS_LABELS = ["Organik", "Plastik", "Kertas", "Logam"]
+CLASS_LABELS = ["Organik", "Kertas", "Plastik", "Logam"]
 
 # ---- Path Model (letakkan file model di folder /model/) ----
-MODEL_DIR = Path(__file__).parent.parent / "model"
+MODEL_DIR = Path(__file__).parent / "model"
 YOLO_MODEL_PATH  = MODEL_DIR / "edusampah_yolov8.pt"
 ONNX_MODEL_PATH  = MODEL_DIR / "edusampah_model.onnx"
 
@@ -65,65 +65,83 @@ def load_model():
     return {"type": "dummy", "model": None}
 
 
-def predict(model_info: dict, img_array: np.ndarray) -> dict:
+def predict(model_dict, img_array: np.ndarray) -> dict:
     """
-    Jalankan prediksi pada gambar.
-
-    Args:
-        model_info: dict berisi 'type' dan 'model'
-        img_array:  numpy array (224, 224, 3) uint8
-
-    Returns:
-        dict: { 'class': str, 'confidence': float, 'all_scores': dict }
+    Melakukan prediksi menggunakan model yang sesuai (YOLOv8 Deteksi/Klasifikasi atau ONNX).
     """
-    model_type = model_info["type"]
-    model      = model_info["model"]
-
-    if model_type == "yolo":
-        return _predict_yolo(model, img_array)
-    elif model_type == "onnx":
-        return _predict_onnx(model, img_array)
-    else:
+    if model_dict["type"] == "dummy":
         return _predict_dummy(img_array)
 
-
-def _predict_yolo(model, img_array: np.ndarray) -> dict:
-    """Prediksi menggunakan YOLOv8 (mode klasifikasi)."""
-    results = model.predict(img_array, verbose=False)
-    # Ambil probabilitas dari hasil klasifikasi YOLOv8
-    probs = results[0].probs.data.cpu().numpy()
-    idx = int(np.argmax(probs))
-    scores = {CLASS_LABELS[i]: float(probs[i]) for i in range(len(CLASS_LABELS))}
-    return {
-        "class": CLASS_LABELS[idx],
-        "confidence": float(probs[idx]),
-        "all_scores": scores
-    }
-
-
-def _predict_onnx(session, img_array: np.ndarray) -> dict:
-    """Prediksi menggunakan ONNX Runtime."""
-    # Normalisasi [0,255] → [0,1] dan reshape ke (1, 3, 224, 224)
-    img = img_array.astype(np.float32) / 255.0
-    img = np.transpose(img, (2, 0, 1))   # HWC → CHW
-    img = np.expand_dims(img, axis=0)    # → (1, 3, 224, 224)
-
-    input_name = session.get_inputs()[0].name
-    outputs = session.run(None, {input_name: img})
-    logits = outputs[0][0]
-
-    # Softmax
-    exp_logits = np.exp(logits - np.max(logits))
-    probs = exp_logits / exp_logits.sum()
-
-    idx = int(np.argmax(probs))
-    scores = {CLASS_LABELS[i]: float(probs[i]) for i in range(len(CLASS_LABELS))}
-    return {
-        "class": CLASS_LABELS[idx],
-        "confidence": float(probs[idx]),
-        "all_scores": scores
-    }
-
+    if model_dict["type"] == "yolo":
+        model = model_dict["model"]
+        # Jalankan prediksi pada gambar
+        results = model(img_array, verbose=False)
+        result = results[0]
+        
+        # OPSI 1: JIKA MODELNYA ADALAH KLASIFIKASI (.probs)
+        if hasattr(result, 'probs') and result.probs is not None:
+            probs = result.probs.data.cpu().numpy()
+            idx = int(np.argmax(probs))
+            scores = {CLASS_LABELS[i]: float(probs[i]) for i in range(len(CLASS_LABELS)) if i < len(probs)}
+            return {
+                "class": CLASS_LABELS[idx],
+                "confidence": float(probs[idx]),
+                "all_scores": scores
+            }
+            
+        # OPSI 2: JIKA MODELNYA ADALAH DETEKSI OBJEK (.boxes) -> Sesuai model unduhanmu
+        elif hasattr(result, 'boxes') and result.boxes is not None and len(result.boxes) > 0:
+            # Ambil deteksi dengan score/confidence tertinggi
+            best_box_idx = int(np.argmax(result.boxes.conf.cpu().numpy()))
+            cls_idx = int(result.boxes.cls[best_box_idx].cpu().numpy())
+            confidence = float(result.boxes.conf[best_box_idx].cpu().numpy())
+            
+            # Ambil nama kelas dari model asli untuk dicocokkan
+            model_names = model.names
+            detected_name = model_names.get(cls_idx, "").lower()
+            
+            # Petakan ke CLASS_LABELS proyekmu ["Organik", "Plastik", "Kertas", "Logam"]
+            final_class = "Organik" # Default
+            if "paper" in detected_name or "kertas" in detected_name:
+                final_class = "Kertas"
+            elif "plastic" in detected_name or "plastik" in detected_name:
+                final_class = "Plastik"
+            elif "metal" in detected_name or "logam" in detected_name or "can" in detected_name:
+                final_class = "Logam"
+            elif "organic" in detected_name or "trash" in detected_name or "daun" in detected_name:
+                final_class = "Organik"
+                
+            # Buat all_scores tiruan agar frontend tidak eror saat merender grafik
+            scores = {label: 0.0 for label in CLASS_LABELS}
+            scores[final_class] = confidence
+            
+            return {
+                "class": final_class,
+                "confidence": confidence,
+                "all_scores": scores
+            }
+        else:
+            # Fallback jika model deteksi tidak menemukan objek sama sekali di gambar
+            # Kita arahkan ke kelas default dengan confidence rendah daripada eror
+            return {
+                "class": "Organik",
+                "confidence": 0.30,
+                "all_scores": {label: 0.25 for label in CLASS_LABELS}
+            }
+            
+    elif model_dict["type"] == "onnx":
+        session = model_dict["session"]
+        input_name = session.get_inputs()[0].name
+        img_input = np.expand_dims(img_array, axis=0).astype(np.float32) / 255.0
+        outputs = session.run(None, {input_name: img_input})
+        probs = outputs[0][0]
+        idx = int(np.argmax(probs))
+        scores = {CLASS_LABELS[i]: float(probs[i]) for i in range(len(CLASS_LABELS))}
+        return {
+            "class": CLASS_LABELS[idx],
+            "confidence": float(probs[idx]),
+            "all_scores": scores
+        }
 
 def _predict_dummy(img_array: np.ndarray) -> dict:
     """

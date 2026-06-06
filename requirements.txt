@@ -23,3 +23,6 @@ onnxruntime==1.18.0
 # ---- Utilities ----
 python-multipart==0.0.9   # Upload file
 python-dotenv==1.0.1       # Variabel environment
+
+# Tambahan untuk kompatibilitas server Linux di Hugging Face
+torchvision==0.18.1
