@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduSampah AI — SMA Muhammadiyah 1 Yogyakarta</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+    <style>
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .tab.active { border-bottom:2px solid #1D9E75; color: #1D9E75; font-weight: bold; }
+        #thinking, #result-box { display: none; }
+        #thinking.show, #result-box.show { display: block; }
+        .open { display: block !important; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased">
+
+    <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg flex flex-col justify-between">
+        
+        <header class="bg-[#1D9E75] text-white p-4 text-center rounded-b-2xl shadow-md">
+            <h1 class="text-xl font-extrabold tracking-wide">🌱 EduSampah AI</h1>
+            <p class="text-xs opacity-90 mt-0.5">SMA Muhammadiyah 1 Yogyakarta — Adiwiyata 2026</p>
+        </header>
+
+        <main class="p-4 flex-1">
+            
+            <div id="panel-scan" class="panel active space-y-4">
+                <div class="relative bg-gray-900 rounded-2xl h-64 overflow-hidden shadow-inner flex items-center justify-center">
+                    <video id="video-el" autoplay playsinline class="w-full h-full object-cover hidden"></video>
+                    <img id="preview-img" class="w-full h-full object-cover hidden" alt="Preview Sampah">
+                    
+                    <div id="cam-overlay" class="text-center text-gray-400 p-4">
+                        <i class="ti ti-camera text-4xl block mb-2 text-[#1D9E75]"></i>
+                        <p class="text-sm font-medium">Kamera Belum Aktif</p>
+                        <p class="text-xs opacity-70 mt-1">Silakan nyalakan kamera atau unggah foto sampah Anda</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="startCamera()" class="flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 font-semibold py-2.5 px-4 rounded-xl border border-emerald-200 shadow-sm hover:bg-emerald-100 transition-all cursor-pointer">
+                        <i class="ti ti-camera"></i> Buka Kamera
+                    </button>
+                    <label class="flex items-center justify-center gap-2 bg-gray-50 text-gray-700 font-semibold py-2.5 px-4 rounded-xl border border-gray-200 shadow-sm hover:bg-gray-100 transition-all cursor-pointer text-center">
+                        <i class="ti ti-upload"></i> Unggah Foto
+                        <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)" class="hidden">
+                    </label>
+                </div>
+
+                <button id="btn-scan-now" onclick="doScan()" class="w-full bg-[#1D9E75] text-white font-bold py-3 px-4 rounded-xl shadow-md hover:bg-[#157858] transition-all flex items-center justify-center gap-2 cursor-pointer hidden">
+                    <i class="ti ti-scan"></i> Klasifikasikan Sampah
+                </button>
+
+                <div id="thinking" class="text-center py-6">
+                    <div class="animate-spin inline-block w-8 h-8 border-[3px] border-current border-t-transparent text-[#1D9E75] rounded-full" role="status" aria-label="loading"></div>
+                    <p class="text-sm text-gray-500 mt-2 font-medium">AI sedang menganalisis gambar...</p>
+                </div>
+
+                <div id="result-box" class="bg-white border border-gray-100 rounded-2xl p-4 shadow-md space-y-3 transition-all">
+                    <div class="flex items-center gap-3">
+                        <div id="result-icon" class="w-12 h-12 rounded-xl flex items-center justify-center"></div>
+                        <div class="flex-1">
+                            <span class="text-xs uppercase tracking-wider text-gray-400 font-bold">Hasil Deteksi</span>
+                            <h2 id="result-type" class="text-xl font-extrabold text-gray-800 -mt-0.5">Organik</h2>
+                        </div>
+                        <div class="text-right">
+                            <span id="conf-text" class="text-lg font-black text-[#1D9E75]">95%</span>
+                            <span class="text-[10px] text-gray-400 block font-semibold uppercase">Confidence</span>
+                        </div>
+                    </div>
+                    <div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                        <div id="conf-bar" class="bg-[#1D9E75] h-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <p id="result-info" class="text-xs text-gray-600 bg-gray-50 p-3 rounded-xl leading-relaxed"></p>
+                    <div id="result-tips" class="space-y-1.5 pt-1"></div>
+                    
+                    <button onclick="resetScan()" class="w-full mt-2 bg-gray-100 text-gray-600 font-semibold py-2 px-4 rounded-xl text-xs hover:bg-gray-200 transition-all cursor-pointer">
+                        <i class="ti ti-refresh"></i> Scan Ulang
+                    </button>
+                </div>
+            </div>
+
+            <div id="panel-stats" class="panel space-y-4">
+                <div class="bg-emerald-800 text-white p-4 rounded-2xl shadow-md flex justify-between items-center">
+                    <div>
+                        <p class="text-xs opacity-80 uppercase tracking-wider font-semibold">Total Sampah Dipilah</p>
+                        <h2 id="total-scan" class="text-3xl font-black mt-0.5">0</h2>
+                    </div>
+                    <i class="ti ti-chart-bar text-4xl opacity-40"></i>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                        <span class="text-xs text-gray-400 font-medium">🌿 Sampah Organik</span>
+                        <h3 id="ct-organik" class="text-xl font-bold text-emerald-600 mt-0.5">0</h3>
+                    </div>
+                    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                        <span class="text-xs text-gray-400 font-medium">📦 Sampah Anorganik</span>
+                        <h3 id="ct-anorganik" class="text-xl font-bold text-orange-500 mt-0.5">0</h3>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-3">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400">Rincian Jenis Sampah</h4>
+                    <div class="space-y-2.5">
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-xs font-medium"><span>Organik</span><span id="pct-organik">0%</span></div>
+                            <div class="w-full bg-gray-100 h-2 rounded-full"><div id="bar-organik" class="bg-emerald-500 h-full rounded-full" style="width: 0%"></div></div>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-xs font-medium"><span>Plastik</span><span id="pct-plastic">0%</span></div>
+                            <div class="w-full bg-gray-100 h-2 rounded-full"><div id="bar-plastik" class="bg-amber-500 h-full rounded-full" style="width: 0%"></div></div>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-xs font-medium"><span>Kertas</span><span id="pct-kertas">0%</span></div>
+                            <div class="w-full bg-gray-100 h-2 rounded-full"><div id="bar-kertas" class="bg-blue-500 h-full rounded-full" style="width: 0%"></div></div>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-xs font-medium"><span>Logam</span><span id="pct-logam">0%</span></div>
+                            <div class="w-full bg-gray-100 h-2 rounded-full"><div id="bar-logam" class="bg-red-500 h-full rounded-full" style="width: 0%"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="resetStats()" class="w-full text-center text-red-500 text-xs font-semibold py-2 hover:underline cursor-pointer">
+                    <i class="ti ti-trash"></i> Reset Seluruh Data Statistik
+                </button>
+            </div>
+
+            <div id="panel-edu" class="panel space-y-3">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-gray-400 mb-1">Materi Edukasi Sampah</h3>
+                
+                <div onclick="showEduDetail('organik')" class="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm cursor-pointer hover:bg-gray-50 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">🌿</div>
+                    <div class="flex-1"><h4 class="text-sm font-bold">Mengenal Sampah Organik</h4><p class="text-xs text-gray-400">Cara pengomposan & biopori sekolah.</p></div>
+                    <i class="ti ti-chevron-right text-gray-400"></i>
+                </div>
+
+                <div onclick="showEduDetail('plastik')" class="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm cursor-pointer hover:bg-gray-50 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-50 flex items-center justify-center text-xl">♻️</div>
+                    <div class="flex-1"><h4 class="text-sm font-bold">Bahaya & Kode Plastik</h4><p class="text-xs text-gray-400">Memilah kode botol plastik 1 s.d 7.</p></div>
+                    <i class="ti ti-chevron-right text-gray-400"></i>
+                </div>
+
+                <div onclick="showEduDetail('kertas')" class="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm cursor-pointer hover:bg-gray-50 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xl">📄</div>
+                    <div class="flex-1"><h4 class="text-sm font-bold">Daur Ulang Kertas Moehi</h4><p class="text-xs text-gray-400">Menyelamatkan pohon lewat pilah kertas.</p></div>
+                    <i class="ti ti-chevron-right text-gray-400"></i>
+                </div>
+
+                <div onclick="showEduDetail('logam')" class="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm cursor-pointer hover:bg-gray-50 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">⚙️</div>
+                    <div class="flex-1"><h4 class="text-sm font-bold">Logam & Nilai Ekonomisnya</h4><p class="text-xs text-gray-400">Kaleng aluminium untuk Bank Sampah.</p></div>
+                    <i class="ti ti-chevron-right text-gray-400"></i>
+                </div>
+            </div>
+
+            <div id="panel-about" class="panel bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
+                <h3 class="text-lg font-extrabold text-gray-800">Tentang Proyek</h3>
+                <p class="text-xs text-gray-600 leading-relaxed">
+                    <b>EduSampah AI</b> adalah inovasi program Adiwiyata digital berbasis kecerdasan buatan (AI) di <b>SMA Muhammadiyah 1 Yogyakarta</b>.
+                </p>
+                <p class="text-xs text-gray-600 leading-relaxed">
+                    Sistem ini mengintegrasikan model deteksi objek YOLOv8 dengan framework FastAPI guna mengedukasi seluruh warga sekolah dalam memilah jenis sampah secara instan dan interaktif.
+                </p>
+                <div class="bg-gray-50 p-3 rounded-xl text-[11px] text-gray-500 space-y-1">
+                    <div><b>Tech Stack:</b> FastAPI, Python, TailwindCSS, Vanila JS</div>
+                    <div><b>Versi Aplikasi:</b> 1.0.0 (Production Ready)</div>
+                </div>
+            </div>
+
+        </main>
+
+        <div id="edu-modal" class="fixed inset-0 bg-black/50 z-50 items-center justify-center p-4 hidden">
+            <div class="bg-white max-w-sm mx-auto rounded-2xl shadow-xl overflow-hidden mt-24">
+                <div id="modal-content" class="p-4"></div>
+                <div class="bg-gray-50 px-4 py-3 text-right">
+                    <button onclick="closeModal()" class="bg-gray-200 text-gray-700 text-xs font-bold py-2 px-4 rounded-xl hover:bg-gray-300 transition-all cursor-pointer">Tutup</button>
+                </div>
+            </div>
+        </div>
+
+        <nav class="bg-white border-t border-gray-100 p-2 grid grid-cols-4 shadow-inner text-center">
+            <button onclick="switchTab('scan')" class="tab active flex flex-col items-center justify-center py-1 text-gray-400 hover:text-[#1D9E75] cursor-pointer">
+                <i class="ti ti-scan text-xl"></i><span class="text-[10px] mt-0.5">Scan</span>
+            </button>
+            <button onclick="switchTab('stats')" class="tab flex flex-col items-center justify-center py-1 text-gray-400 hover:text-[#1D9E75] cursor-pointer">
+                <i class="ti ti-chart-bar text-xl"></i><span class="text-[10px] mt-0.5">Statistik</span>
+            </button>
+            <button onclick="switchTab('edu')" class="tab flex flex-col items-center justify-center py-1 text-gray-400 hover:text-[#1D9E75] cursor-pointer">
+                <i class="ti ti-book text-xl"></i><span class="text-[10px] mt-0.5">Edukasi</span>
+            </button>
+            <button onclick="switchTab('about')" class="tab flex flex-col items-center justify-center py-1 text-gray-400 hover:text-[#1D9E75] cursor-pointer">
+                <i class="ti ti-info-circle text-xl"></i><span class="text-[10px] mt-0.5">Tentang</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
