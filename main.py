@@ -27,11 +27,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# ---- KODE REVISI CORS (Izinkan Semua Koneksi Frontend Mengakses API) ----
+# ---- KODE INTEGRASI CORS HUGGING FACE (MENGIZINKAN LIVE SERVER 127.0.0.1) ----
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Mengizinkan localhost/Live Server mengakses backend internet
-    allow_credentials=True,
+    allow_origins=["*"],  # Mengizinkan localhost, live server, atau domain web mana pun
+    allow_credentials=False,  # Harus bernilai False jika menggunakan allow_origins=["*"] di internet publik
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -77,8 +77,9 @@ def get_stats():
 
 
 # =========================================================================
-#   ENDPOINT UTAMA REVISI: Menerima File Gambar Langsung dari app.js
+#   ENDPOINT UTAMA: Menerima File Gambar Langsung dari app.js (SINKRON)
 # =========================================================================
+
 @app.post("/predict", response_model=ClassifyResponse)
 async def classify_image(file: UploadFile = File(...)):
     server_stats["total_requests"] += 1
@@ -88,19 +89,18 @@ async def classify_image(file: UploadFile = File(...)):
         server_stats["failed"] += 1
         raise HTTPException(status_code=503, detail="Model AI belum siap di server.")
 
-    # 1. Membaca File Gambar yang Dikirim dari Frontend
+    # 1. Membaca File Gambar dari Frontend (Format RGB)
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("RGB")
-        # Menyesuaikan dengan ukuran input model AI Anda
         image_resized = image.resize((640, 640))
         img_array = np.array(image_resized)
     except Exception as e:
         server_stats["failed"] += 1
         logger.error(f"Gagal memproses file gambar: {e}")
-        raise HTTPException(status_code=400, detail=f"File gambar rusak atau tidak valid: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"File gambar rusak: {str(e)}")
 
-    # 2. Melakukan Prediksi dengan Model AI
+    # 2. Melakukan Prediksi melalui model_loader.py
     try:
         result = predict(model, img_array)
     except Exception as e:
@@ -111,12 +111,14 @@ async def classify_image(file: UploadFile = File(...)):
     elapsed_ms = int((time.time() - start) * 1000)
     server_stats["successful"] += 1
 
-    logger.info(f"Prediksi: {result['class']} ({result['confidence']:.2%}) | {elapsed_ms}ms")
+    logger.info(f"Prediksi Berhasil: {result['class_name']} ({result['confidence']:.2%}) | {elapsed_ms}ms")
 
+    # Mengembalikan data struktur yang sudah pasti sesuai dengan ClassifyResponse di atas
     return ClassifyResponse(
         success=True,
-        class_name=result["class"],
-        confidence=result["confidence"],
+        class_name=result["class_name"],  
+        confidence=result["confidence"],  
         processing_time_ms=elapsed_ms,
-        all_scores=result["all_scores"]
+        all_scores={}
     )
+    

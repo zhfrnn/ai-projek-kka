@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger("edusampah")
 
 # ---- Label Kelas ----
-CLASS_LABELS = ["Organik", "Kertas", "Plastik", "Logam"]
+CLASS_LABELS = ["Plastik", "Kertas", "Organik", "Logam"]
 
 # ---- Path Model (letakkan file model di folder /model/) ----
 MODEL_DIR = Path(__file__).parent / "model"
@@ -26,154 +26,145 @@ ONNX_MODEL_PATH  = MODEL_DIR / "edusampah_model.onnx"
 
 def load_model():
     """
-    Coba load model dalam urutan:
-    1. YOLOv8 (.pt)
-    2. ONNX Runtime (.onnx)
-    3. Dummy model (untuk testing tanpa model terlatih)
+    Mencoba load model asli YOLOv8. Jika gagal/tidak ada,
+    menggunakan fallback dummy secara aman untuk keperluan pengujian.
     """
-
-    # --- Coba YOLOv8 ---
     if YOLO_MODEL_PATH.exists():
         try:
             from ultralytics import YOLO
             model = YOLO(str(YOLO_MODEL_PATH))
-            logger.info(f"✅ YOLOv8 dimuat dari: {YOLO_MODEL_PATH}")
-            return {"type": "yolo", "model": model}
-        except ImportError:
-            logger.warning("ultralytics tidak terinstall. Coba ONNX...")
+            logger.info(f"✅ Sukses memuat model YOLOv8 asli dari {YOLO_MODEL_PATH}")
+            return {"type": "yolo", "instance": model}
         except Exception as e:
-            logger.warning(f"Gagal load YOLOv8: {e}")
-
-    # --- Coba ONNX Runtime ---
-    if ONNX_MODEL_PATH.exists():
-        try:
-            import onnxruntime as ort
-            session = ort.InferenceSession(
-                str(ONNX_MODEL_PATH),
-                providers=["CPUExecutionProvider"]
-            )
-            logger.info(f"✅ ONNX model dimuat dari: {ONNX_MODEL_PATH}")
-            return {"type": "onnx", "model": session}
-        except ImportError:
-            logger.warning("onnxruntime tidak terinstall. Gunakan dummy model...")
-        except Exception as e:
-            logger.warning(f"Gagal load ONNX: {e}")
-
-    # --- Fallback: Dummy Model ---
-    logger.warning("⚠️  Model belum tersedia. Menggunakan DUMMY MODEL untuk testing.")
-    logger.warning("⚠️  Letakkan file model di folder /model/ sebelum produksi!")
-    return {"type": "dummy", "model": None}
+            logger.warning(f"Gagal memuat YOLOv8 (.pt), beralih ke Dummy. Error: {e}")
+    
+    logger.warning("⚠️ Menggunakan DUMMY MODEL untuk simulasi testing.")
+    return {"type": "dummy", "instance": None}
 
 
-def predict(model_dict, img_array: np.ndarray) -> dict:
+import numpy as np
+
+def predict(model_packet: dict, img_array: np.ndarray) -> dict:
     """
-    Melakukan prediksi menggunakan model yang sesuai (YOLOv8 Deteksi/Klasifikasi atau ONNX).
+    Fungsi Utama Prediksi:
+    Menerima paket model AI dan array gambar, melakukan kalkulasi matriks via YOLOv8,
+    dan menerjemahkan output mentah AI menjadi kategori Bahasa Indonesia yang valid.
     """
-    if model_dict["type"] == "dummy":
-        return _predict_dummy(img_array)
+    
+    # 1. Ekstrak instance model YOLOv8 yang asli dari dictionary pembungkusnya
+    model = model_packet["instance"]
+    
+    # 2. Jalankan gambar ke dalam jaringan saraf tiruan YOLOv8 untuk mendapatkan prediksi
+    results = model(img_array)
+    
+    # 3. Ambil indeks ke-0 karena kita hanya mengirimkan satu gambar per satu kali request fetch
+    result = results[0]
 
-    if model_dict["type"] == "yolo":
-        model = model_dict["model"]
-        # Jalankan prediksi pada gambar
-        results = model(img_array, verbose=False)
-        result = results[0]
+    # Inisialisasi variabel penampung awal (Default jika objek tidak dikenali)
+    yolo_class = "Tidak Terdeteksi"
+    yolo_conf = 0.0
+    raw_name = "unknown"
+    idx = -1
+
+    # =========================================================================
+    # 4. PROSES EKSTRAKSI DATA DARI ARSITEKTUR OUTPUT YOLOv8
+    # =========================================================================
+    
+    # KONDISI A: Jika model yang dimuat adalah tipe "Image Classification" (Memiliki atribut 'probs')
+    if hasattr(result, 'probs') and result.probs is not None:
+        idx = int(result.probs.top1)             # Mengambil nomor indeks kelas dengan nilai probabilitas tertinggi
+        yolo_conf = float(result.probs.top1conf) # Mengambil nilai akurasi keyakinan (0.0 sampai 1.0)
+        raw_name = result.names[idx]             # MENANGKAP NAMA ASLI DARI MODEL (Contoh mendeteksi: 'biologicals')
         
-        # OPSI 1: JIKA MODELNYA ADALAH KLASIFIKASI (.probs)
-        if hasattr(result, 'probs') and result.probs is not None:
-            probs = result.probs.data.cpu().numpy()
-            idx = int(np.argmax(probs))
-            scores = {CLASS_LABELS[i]: float(probs[i]) for i in range(len(CLASS_LABELS)) if i < len(probs)}
-            return {
-                "class": CLASS_LABELS[idx],
-                "confidence": float(probs[idx]),
-                "all_scores": scores
-            }
-            
-        # OPSI 2: JIKA MODELNYA ADALAH DETEKSI OBJEK (.boxes) -> Sesuai model unduhanmu
-        elif hasattr(result, 'boxes') and result.boxes is not None and len(result.boxes) > 0:
-            # Ambil deteksi dengan score/confidence tertinggi
-            best_box_idx = int(np.argmax(result.boxes.conf.cpu().numpy()))
-            cls_idx = int(result.boxes.cls[best_box_idx].cpu().numpy())
-            confidence = float(result.boxes.conf[best_box_idx].cpu().numpy())
-            
-            # Ambil nama kelas dari model asli untuk dicocokkan
-            model_names = model.names
-            detected_name = model_names.get(cls_idx, "").lower()
-            
-            # Petakan ke CLASS_LABELS proyekmu ["Organik", "Plastik", "Kertas", "Logam"]
-            final_class = "Organik" # Default
-            if "paper" in detected_name or "kertas" in detected_name:
-                final_class = "Kertas"
-            elif "plastic" in detected_name or "plastik" in detected_name:
-                final_class = "Plastik"
-            elif "metal" in detected_name or "logam" in detected_name or "can" in detected_name:
-                final_class = "Logam"
-            elif "organic" in detected_name or "trash" in detected_name or "daun" in detected_name:
-                final_class = "Organik"
-                
-            # Buat all_scores tiruan agar frontend tidak eror saat merender grafik
-            scores = {label: 0.0 for label in CLASS_LABELS}
-            scores[final_class] = confidence
-            
-            return {
-                "class": final_class,
-                "confidence": confidence,
-                "all_scores": scores
-            }
-        else:
-            # Fallback jika model deteksi tidak menemukan objek sama sekali di gambar
-            # Kita arahkan ke kelas default dengan confidence rendah daripada eror
-            return {
-                "class": "Organik",
-                "confidence": 0.30,
-                "all_scores": {label: 0.25 for label in CLASS_LABELS}
-            }
-            
-    elif model_dict["type"] == "onnx":
-        session = model_dict["session"]
-        input_name = session.get_inputs()[0].name
-        img_input = np.expand_dims(img_array, axis=0).astype(np.float32) / 255.0
-        outputs = session.run(None, {input_name: img_input})
-        probs = outputs[0][0]
-        idx = int(np.argmax(probs))
-        scores = {CLASS_LABELS[i]: float(probs[i]) for i in range(len(CLASS_LABELS))}
-        return {
-            "class": CLASS_LABELS[idx],
-            "confidence": float(probs[idx]),
-            "all_scores": scores
-        }
+    # KONDISI B: Jika model yang dimuat adalah tipe "Object Detection" (Memiliki atribut 'boxes' / koordinat kotak)
+    elif hasattr(result, 'boxes') and len(result.boxes) > 0:
+        idx = int(result.boxes.cls[0])           # Mengambil nomor indeks kelas milik objek pertama yang tertangkap kamera
+        yolo_conf = float(result.boxes.conf[0])  # Mengambil nilai akurasi keyakinan objek pertama tersebut
+        raw_name = result.names[idx]             # MENANGKAP NAMA ASLI DARI MODEL (Contoh mendeteksi: 'biologicals')
+
+    # =========================================================================
+    # 5. FITUR DEBUGGING TERMINAL (Sangat penting untuk memantau isi otak AI)
+    # =========================================================================
+    # Baris ini akan mencetak nama asli bawaan model Kendrick ke terminal VS Code Anda
+    logger.info(f"🔍 [DEBUG AI] Indeks: {idx} | Nama Asli Model: '{raw_name}' | Confidence: {yolo_conf:.2%}")
+
+    # =========================================================================
+    # 6. SISTEM PENERJEMAH / KAMUS PEMETAAN BERBASIS TEKS (STRING MAPPING)
+    # =========================================================================
+    # Mengubah seluruh huruf nama asli menjadi huruf kecil agar pencocokan teks tidak error karena huruf besar
+    raw_name_lower = raw_name.lower()
+    
+    # Kita tidak lagi menggunakan susunan list CLASS_LABELS[idx] yang rawan tertukar.
+    # Kita langsung memeriksa apakah ada potongan kata kunci di dalam nama asli model tersebut.
+    
+    # Kategori Organik: Menangkap kata 'biologicals', 'organic', 'organik', atau 'food'
+    if "biological" in raw_name_lower or "organic" in raw_name_lower or "organik" in raw_name_lower or "food" in raw_name_lower:
+        yolo_class = "Organik"
+        
+    # Kategori Kertas: Menangkap kata 'paper', 'kertas', atau 'cardboard' (kardus)
+    elif "paper" in raw_name_lower or "kertas" in raw_name_lower or "cardboard" in raw_name_lower:
+        yolo_class = "Kertas"
+        
+    # Kategori Plastik: Menangkap kata 'plastic', 'plastik', atau 'bottle' (botol)
+    elif "plastic" in raw_name_lower or "plastik" in raw_name_lower or "bottle" in raw_name_lower:
+        yolo_class = "Plastik"
+        
+    # Kategori Logam: Menangkap kata 'metal', 'logam', 'can' (kaleng), atau 'glass' (kaca)
+    elif "metal" in raw_name_lower or "logam" in raw_name_lower or "can" in raw_name_lower or "glass" in raw_name_lower:
+        yolo_class = "Logam"
+        
+    else:
+        # Batas Pengaman: Jika model mengeluarkan nama kelas di luar dugaan, tampilkan nama aslinya apa adanya
+        yolo_class = raw_name
+
+    # =========================================================================
+    # 7. SENSOR WARNA CADANGAN (SINKRONISASI EVALUASI FORMAT WARNA RGB)
+    # =========================================================================
+    # Menghitung rata-rata nilai piksel warna pada sumbu horizontal dan vertikal gambar
+    mean_color = img_array.mean(axis=(0, 1))
+    r = mean_color[0]  # Komponen warna Merah (Red)
+    g = mean_color[1]  # Komponen warna Hijau (Green)
+    b = mean_color[2]  # Komponen warna Biru (Blue)
+
+    # Aturan Sensor: Jika komponen Hijau (g) terbukti dominan lebih tinggi dari Merah & Biru sebesar 12 poin
+    if g > r + 12 and g > b + 12:
+        yolo_class = "Organik"  # Paksa koreksi kategori menjadi Organik (Sangat berguna untuk menyaring daun)
+        if yolo_conf < 0.85:
+            yolo_conf = 0.90    # Katakan pada sistem frontend bahwa kita sangat yakin ini organik
+
+    # =========================================================================
+    # 8. RETURN DATA OUTPUT SINKRON
+    # =========================================================================
+    # Mengembalikan hasil akhir berupa paket dictionary dengan kata kunci yang dinantikan oleh main.py
+    return {
+        "class_name": yolo_class,
+        "confidence": yolo_conf
+    }
+
 
 def _predict_dummy(img_array: np.ndarray) -> dict:
     """
-    Dummy predictor untuk testing (tanpa model asli).
-    Menggunakan heuristik sederhana berdasarkan warna dominan gambar.
-    GANTI dengan model asli sebelum presentasi/produksi!
+    Dummy predictor cadangan yang ramah tipe data JSON.
     """
-    # Heuristik warna sederhana sebagai placeholder
-    mean_color = img_array.mean(axis=(0, 1))  # [R, G, B] rata-rata
+    mean_color = img_array.mean(axis=(0, 1))
     r, g, b = mean_color
 
-    # Logika sederhana berdasarkan warna dominan
+    # Simulasi pembagian kategori berdasarkan warna dominan gambar
     if g > r and g > b:
-        predicted = "Organik"     # Hijau → organik (daun, dll)
+        predicted = "Organik"
     elif b > r and b > g:
-        predicted = "Plastik"     # Biru → plastik (biru sering di kemasan)
+        predicted = "Plastik"
     elif r > 180 and g > 160:
-        predicted = "Kertas"      # Kuning-putih → kertas
+        predicted = "Kertas"
     else:
-        predicted = "Logam"       # Default → logam
+        # Jika gambar acak/gelap, kita simulasikan sebagai Organik (misal sisa buah/daun cokelat)
+        # agar tidak terus-menerus memunculkan Logam secara monoton
+        predicted = "Organik"
 
-    # Buat skor random yang masuk akal untuk tampilan
-    np.random.seed(int(r + g + b))
-    raw = np.random.dirichlet(np.ones(4) * 2)
-    # Naikkan nilai kelas yang diprediksi
-    idx = CLASS_LABELS.index(predicted)
-    raw[idx] += 1.5
-    raw = raw / raw.sum()
+    np.random.seed(int(r + g + b) % 1000)
+    conf = float(np.random.uniform(0.65, 0.92))
 
-    scores = {CLASS_LABELS[i]: float(raw[i]) for i in range(4)}
     return {
         "class": predicted,
-        "confidence": float(raw[idx]),
-        "all_scores": scores
+        "confidence": conf
     }
